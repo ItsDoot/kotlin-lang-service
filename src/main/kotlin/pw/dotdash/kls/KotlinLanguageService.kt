@@ -6,9 +6,9 @@ import org.spongepowered.plugin.PluginCandidate
 import org.spongepowered.plugin.PluginEnvironment
 import org.spongepowered.plugin.PluginKeys
 import org.spongepowered.plugin.jvm.JVMPluginLanguageService
-import pw.dotdash.kls.kodein.KodeinInitializer
 import pw.dotdash.kls.kodein.UseKodein
 import pw.dotdash.kls.kodein.import
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.KType
@@ -41,10 +41,8 @@ class KotlinLanguageService : JVMPluginLanguageService() {
             if (singleton != null) {
                 // Plugin is using a kotlin `object`.
 
-                if (singleton is KodeinInitializer) {
-                    // Since we don't want to inject into fields of a pre-existing instance, let's place the injector this way.
-                    singleton.kodein = kodein
-                }
+                // Save it here so that the plugin can access it later with `kodein<MyPlugin>()`.
+                kodeins[pluginClass] = kodein
 
                 // Now just return the singleton instance.
                 return singleton
@@ -71,4 +69,14 @@ class KotlinLanguageService : JVMPluginLanguageService() {
 
     @OptIn(ExperimentalStdlibApi::class)
     private val kTypeKodein: KType = typeOf<DI>()
+
+    companion object {
+        internal val kodeins = ConcurrentHashMap<Class<*>, DI>()
+    }
 }
+
+fun kodein(pluginClass: Class<*>): DI =
+    requireNotNull(KotlinLanguageService.kodeins[pluginClass]?.di) { "This class was not loaded as a singleton through KotlinLanguageService" }
+
+inline fun <reified T> kodein(): DI =
+    kodein(T::class.java)
